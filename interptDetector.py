@@ -56,6 +56,3 @@ g1=gaussianfilter()
 diff = getDiffGauss(I, g1)
 points = getExtrema(diff)
 print(points)
-
-
-
