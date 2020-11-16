@@ -33,6 +33,22 @@ def getDiffGauss(I: np.ndarray, filter: np.ndarray):
         diff[i-1] = stack[i] - stack[i-1]
     return diff
 
+def getExtremaSingle(diff: np.ndarray, layer: int):
+    points = []
+    nr, nc = diff[layer].shape
+    patch = np.zeros(shape=(3,3))
+    for r in range(nr):
+        for c in range(nc):
+            for i in range(-1, 2):
+                for j in range(-1, 2):
+                    if r+i < 0 or c+j < 0 or r+i >= nr or c+j >= nc:
+                        patch[i+1, j+1] = 0
+                    else:
+                        patch[i+1, j+1] = diff[layer, r+i, c+j]
+            if (np.argmax(patch) == 4 or np.argmin(patch) == 4):
+                points.append((r, c))
+    return points
+    
 def getExtrema(diff: np.ndarray):
     points = []
     patch = np.zeros(shape=(27))
@@ -51,8 +67,111 @@ def getExtrema(diff: np.ndarray):
                 points.append((r, c))
     return points
 
+def saveKeypoints(I:np.ndarray, points: list, diff: np.ndarray):
+    import xlwt
+    from xlwt import Workbook
+
+    style1 = xlwt.easyxf('pattern: pattern solid, fore_colour yellow;''align: vert centre, horiz center')
+    style2 = xlwt.easyxf('pattern: pattern solid, fore_colour aqua;''align: vert centre, horiz center')
+    reset = xlwt.easyxf('align: vert centre, horiz center')
+
+    book = Workbook()
+    sheet1 = book.add_sheet("highlight", cell_overwrite_ok=True)
+    sheet2 = book.add_sheet("weak", cell_overwrite_ok=True)
+    sheet3 = book.add_sheet("combine", cell_overwrite_ok=True)
+
+    nr, nc = I.shape
+    wPoints = []
+    for i in range(nr):
+        for j in range(nc):
+            sheet1.write(i, j, int(I[i, j]), reset)
+            sheet2.write(i, j, int(I[i, j]), reset)
+            sheet3.write(i, j, int(I[i, j]), reset)
+            if (i,j) in points:
+                sheet1.write(i, j, int(I[i, j]), style1)
+                sheet3.write(i, j, int(I[i, j]), style1)
+                if diff[0, i, j] < 1.0:
+                    sheet2.write(i, j, int(I[i, j]), style2)
+                    sheet3.write(i, j, int(I[i, j]), style2)
+                    wPoints.append((i, j))
+    book.save("highlight.xls")
+    return [x for x in points if x not in wPoints]
+
+def getPointR(I: np.ndarray, points: list, diff:np.ndarray):
+    import copy
+    sPoints = copy.deepcopy(points)
+    Sx = np.array([-1, 0, 1])
+    Sy = Sx.reshape(3,1)
+    Dx = ndimage.correlate1d(diff, Sx, mode='constant')
+    Dxx = ndimage.correlate1d(Dx, Sx, mode= 'constant')
+    Dy = ndimage.correlate(diff, Sy, mode='constant')
+    Dyy = ndimage.correlate(Dy, Sy, mode='constant')
+    Dxy = ndimage.correlate(Dx, Sy, mode='constant')
+    R = np.zeros(shape=diff.shape)
+    nr, nc = R.shape
+    for i in range(nr):
+        for j in range(nc):
+            if (i, j) in points:
+                tr = Dxx[i, j] + Dyy[i, j]
+                det = Dxx[i, j] * Dyy[i, j] - Dxy[i, j] **2
+                R[i, j] = tr**2/det
+    return np.around(R, 2)
+
+def orientationAssg(I: np.ndarray, g1: np.ndarray, keypts: list):
+    Sx = np.array([-1, 0, 1])
+    Sy = Sx.reshape(3,1)
+    Dx = ndimage.correlate1d(I, Sx, mode='nearest')
+    Dy = ndimage.correlate(I, Sy, mode='nearest')
+    nr, nc = I.shape
+    L_mag = np.round(np.sqrt(Dx**2+Dy**2),2)
+    L_ang = np.round(np.rad2deg(np.arctan(Dy/(Dx+np.finfo(float).eps))), 2)
+    L_ang = np.where(Dx < 0, L_ang+180, L_ang)
+    L_ang = np.where(L_ang < 0, 360+L_ang, L_ang)
+    L_ang = np.round(L_ang / 45)*45
+    khist = np.empty(shape=(len(keypts),8))
+    l = 0
+    print(L_mag)
+    for i in range(nr):
+        for j in range(nc):
+            if (i, j) in keypts:
+                obin = np.zeros(shape=(8))
+                for r in range(-2, 3):
+                    for c in range(-2,3):
+                        if r+i < 0 or c+j < 0 or r+i >= nr or c+j >= nc:
+                            continue
+                        else:
+                            obin[int(L_ang[r+i, c+j]//45)] += L_mag[r+i, c+j]
+                khist[l] = obin
+                l+=1
+                if l >= len(keypts):
+                    return khist
+    return -1
+    
+
 I = excelRead("image.xlsx")
 g1=gaussianfilter()
 diff = getDiffGauss(I, g1)
-points = getExtrema(diff)
-print(points)
+points = getExtremaSingle(diff, 0)
+sPoints = saveKeypoints(I, points, diff)
+R = getPointR(I, sPoints, diff[0])
+#print(R)
+print(orientationAssg(I, g1, sPoints))
+print(sPoints)
+
+import numpy as np
+a3 = np.array([-0.0589,-0.0295,0.0510])
+rho = 1/np.linalg.norm(a3)
+M = np.array([0.2946,-0.4419,0.7655 ,0, -0.2357,0.6038,0.6208,816.667,-0.0589,-0.0295,0.0510,100]).reshape(3,4)
+#print(rho * 100)
+x0 = rho**2*(np.dot(M[0,0:3],M[2,0:3]))
+print(x0)
+y0 = rho**2*(np.dot(M[1,0:3],M[2,0:3]))
+print(y0)
+alpha = np.sqrt(rho**2*(np.dot(M[0,0:3],M[0,0:3]))-x0**2)
+print(alpha)
+beta = np.sqrt(rho**2*(np.dot(M[1,0:3],M[1,0:3]))-y0**2)
+print(beta)
+r1 = (rho*M[0,0:3]-x0*M[2,0:3])/alpha
+r2 = (rho*M[1,0:3]-y0*M[2,0:3])/beta
+print(r1)
+print(r2)
