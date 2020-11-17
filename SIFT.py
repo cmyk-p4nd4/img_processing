@@ -52,13 +52,13 @@ def get_candidate_keypoints(D, w=16):
         for j in range(w//2+1, D.shape[1]-w//2-1): 
             for k in range(1, D.shape[2]-1): 
                 patch = D[i-1:i+2, j-1:j+2, k-1:k+2] 
-                if np.argmax(patch) == 13 or np.argmin(patch) == 13: 
-                    candidates.append([i, j, k]) 
+                if np.argmax(patch[k]) == 4 or np.argmin(patch[k]) == 4: 
+                    candidates.append((i, j, k)) 
     return candidates
     
 
-I = excelRead("assg2_image.xlsx")
+I = excelRead("image.xlsx")
 pyr = generate_gaussian_pyramid(I, 4, 1, 1)
 D = generate_DoG_pyramid(pyr)
-cand = get_candidate_keypoints(D[0])
+cand = get_candidate_keypoints(D[1])
 print(f'Keypoints: {cand}')

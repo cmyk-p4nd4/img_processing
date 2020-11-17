@@ -15,7 +15,7 @@ def gaussianfilter(shape=(5,5), sigma = 1):
 
 def excelRead(path):
     data = pd.read_excel(path)
-    return pd.DataFrame.to_numpy(data)
+    return pd.DataFrame.to_numpy(data, dtype=np.float64)
 
 def ConvGauss(L: np.ndarray, filter: np.ndarray, k):
     L2 = L.copy()
@@ -25,7 +25,7 @@ def ConvGauss(L: np.ndarray, filter: np.ndarray, k):
 
 def getDiffGauss(I: np.ndarray, filter: np.ndarray):
     nr, nc = I.shape
-    stack = np.full((4, nr, nc), 100)
+    stack = np.zeros(shape=(4, nr, nc))
     stack[0] = I
     diff = np.zeros(shape=(3, nr, nc))
     for i in range(1, 4):
@@ -71,28 +71,31 @@ def saveKeypoints(I:np.ndarray, points: list, diff: np.ndarray):
     import xlwt
     from xlwt import Workbook
 
-    style1 = xlwt.easyxf('pattern: pattern solid, fore_colour yellow;''align: vert centre, horiz center')
+    style1 = xlwt.easyxf('pattern: pattern solid, fore_colour yellow;''align: vert centre, horiz center;')
     style2 = xlwt.easyxf('pattern: pattern solid, fore_colour aqua;''align: vert centre, horiz center')
-    reset = xlwt.easyxf('align: vert centre, horiz center')
+    reset = xlwt.easyxf('align: vert centre, horiz center',"0.0000")
+    reset2 = xlwt.easyxf('align: vert centre, horiz center')
 
     book = Workbook()
     sheet1 = book.add_sheet("highlight", cell_overwrite_ok=True)
     sheet2 = book.add_sheet("weak", cell_overwrite_ok=True)
     sheet3 = book.add_sheet("combine", cell_overwrite_ok=True)
+    sheet4 = book.add_sheet("diff", cell_overwrite_ok=True)
 
     nr, nc = I.shape
     wPoints = []
     for i in range(nr):
         for j in range(nc):
-            sheet1.write(i, j, int(I[i, j]), reset)
-            sheet2.write(i, j, int(I[i, j]), reset)
-            sheet3.write(i, j, int(I[i, j]), reset)
+            sheet1.write(i, j, float(I[i, j]), reset2)
+            sheet2.write(i, j, float(I[i, j]), reset2)
+            sheet3.write(i, j, float(I[i, j]), reset2)
+            sheet4.write(i, j, float(diff[0, i, j]), reset)
             if (i,j) in points:
-                sheet1.write(i, j, int(I[i, j]), style1)
-                sheet3.write(i, j, int(I[i, j]), style1)
+                sheet1.write(i, j, float(I[i, j]), style1)
+                sheet3.write(i, j, float(I[i, j]), style1)
                 if diff[0, i, j] < 1.0:
-                    sheet2.write(i, j, int(I[i, j]), style2)
-                    sheet3.write(i, j, int(I[i, j]), style2)
+                    sheet2.write(i, j, float(I[i, j]), style2)
+                    sheet3.write(i, j, float(I[i, j]), style2)
                     wPoints.append((i, j))
     book.save("highlight.xls")
     return [x for x in points if x not in wPoints]
@@ -130,7 +133,7 @@ def orientationAssg(I: np.ndarray, g1: np.ndarray, keypts: list):
     L_ang = np.round(L_ang / 45)*45
     khist = np.empty(shape=(len(keypts),8))
     l = 0
-    print(L_mag)
+    #print(L_mag)
     for i in range(nr):
         for j in range(nc):
             if (i, j) in keypts:
@@ -146,12 +149,6 @@ def orientationAssg(I: np.ndarray, g1: np.ndarray, keypts: list):
                 if l >= len(keypts):
                     return khist
     return -1
-    
+ 
 
-I = excelRead("image.xlsx")
-g1=gaussianfilter()
-diff = getDiffGauss(I, g1)
-points = getExtremaSingle(diff, 0)
-sPoints = saveKeypoints(I, points, diff)
-R = getPointR(I, sPoints, diff[0])
-hist = orientationAssg(I, g1, sPoints)
+ 
